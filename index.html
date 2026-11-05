@@ -8,6 +8,8 @@
     :root {
       --primary: #4F46E5;
       --primary-dark: #4338CA;
+      --mpesa: #10B981;
+      --mpesa-dark: #059669;
       --accent: #F59E0B;
       --bg-dark: #0F172A;
       --card-bg: #1E293B;
@@ -154,7 +156,7 @@
     .price {
       font-size: 1.1rem;
       font-weight: bold;
-      color: #10B981;
+      color: var(--mpesa);
     }
 
     .price span {
@@ -178,7 +180,7 @@
       background: var(--primary-dark);
     }
 
-    /* Booking Modal */
+    /* Modals */
     .modal {
       display: none;
       position: fixed;
@@ -186,7 +188,7 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(0, 0, 0, 0.75);
+      background: rgba(0, 0, 0, 0.8);
       z-index: 100;
       justify-content: center;
       align-items: flex-end;
@@ -237,7 +239,7 @@
       margin-bottom: 6px;
     }
 
-    .form-group input, .form-group select {
+    .form-group input {
       width: 100%;
       padding: 10px;
       background: #0F172A;
@@ -266,12 +268,12 @@
       font-weight: bold;
       border-top: 1px solid #334155;
       padding-top: 6px;
-      color: #10B981;
+      color: var(--mpesa);
     }
 
-    .btn-submit {
+    .btn-pay {
       width: 100%;
-      background: #10B981;
+      background: var(--mpesa);
       color: white;
       border: none;
       padding: 12px;
@@ -279,17 +281,47 @@
       font-size: 1rem;
       font-weight: bold;
       cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
     }
 
-    /* Confirmation Banner */
-    .alert {
-      display: none;
-      padding: 12px;
-      margin: 16px;
-      background: #064E3B;
-      border: 1px solid #10B981;
+    .btn-pay:hover {
+      background: var(--mpesa-dark);
+    }
+
+    /* M-Pesa Processing Status */
+    .status-box {
+      text-align: center;
+      padding: 20px 10px;
+    }
+
+    .spinner {
+      border: 4px solid rgba(255, 255, 255, 0.1);
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border-left-color: var(--mpesa);
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px auto;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .receipt-box {
+      background: #0F172A;
+      border: 1px dashed var(--mpesa);
+      padding: 16px;
       border-radius: 8px;
+      margin: 14px 0;
+      text-align: left;
+      font-family: monospace;
       font-size: 0.85rem;
+      line-height: 1.6;
     }
   </style>
 </head>
@@ -298,7 +330,7 @@
   <div class="app-container">
     <header>
       <h1>🏨 StayFinder Kirinyaga</h1>
-      <p>CSK Hackathon Challenge - Mobile Booking App</p>
+      <p>CSK Hackathon Challenge - Mobile Booking & M-Pesa Payment</p>
     </header>
 
     <div class="filter-bar">
@@ -308,25 +340,23 @@
       <button class="chip" onclick="filterHotels('gardens')">Gardens & Venues</button>
     </div>
 
-    <div id="booking-alert" class="alert"></div>
-
     <div class="hotel-list" id="hotel-list">
-      <!-- Dynamic rendering via JS -->
+      <!-- Dynamic rendering -->
     </div>
   </div>
 
-  <!-- Booking Modal -->
+  <!-- Step 1: Booking Details Modal -->
   <div class="modal" id="booking-modal">
     <div class="modal-content">
       <div class="modal-header">
         <h3 id="modal-title">Book Room</h3>
-        <button class="close-btn" onclick="closeModal()">&times;</button>
+        <button class="close-btn" onclick="closeModal('booking-modal')">&times;</button>
       </div>
 
-      <form id="booking-form" onsubmit="confirmBooking(event)">
+      <form id="booking-form" onsubmit="proceedToPayment(event)">
         <div class="form-group">
           <label for="guest-name">Full Name</label>
-          <input type="text" id="guest-name" required placeholder="e.g. John Doe">
+          <input type="text" id="guest-name" required placeholder="e.g. Robert Wangari">
         </div>
 
         <div class="form-group">
@@ -337,6 +367,11 @@
         <div class="form-group">
           <label for="nights">Number of Nights</label>
           <input type="number" id="nights" min="1" value="1" required onchange="calculateTotal()">
+        </div>
+
+        <div class="form-group">
+          <label for="phone-number">M-Pesa Phone Number</label>
+          <input type="tel" id="phone-number" required placeholder="e.g. 0712345678" pattern="^(07|01|254)[0-9]{8}$">
         </div>
 
         <div class="summary-box">
@@ -350,8 +385,32 @@
           </div>
         </div>
 
-        <button type="submit" class="btn-submit">Confirm & Book</button>
+        <button type="submit" class="btn-pay">Pay with M-Pesa Express</button>
       </form>
+    </div>
+  </div>
+
+  <!-- Step 2: M-Pesa Processing & Confirmation Modal -->
+  <div class="modal" id="payment-modal">
+    <div class="modal-content">
+      <div id="payment-processing" class="status-box">
+        <div class="spinner"></div>
+        <h4>Requesting M-Pesa STK Push...</h4>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px;">
+          Please check your phone and enter your M-Pesa PIN to complete the transaction.
+        </p>
+      </div>
+
+      <div id="payment-success" style="display: none;">
+        <div class="modal-header">
+          <h3 style="color: var(--mpesa);">✅ Payment Successful!</h3>
+          <button class="close-btn" onclick="closeModal('payment-modal')">&times;</button>
+        </div>
+        
+        <div class="receipt-box" id="receipt-details"></div>
+
+        <button class="btn-pay" onclick="closeModal('payment-modal')">Done</button>
+      </div>
     </div>
   </div>
 
@@ -414,6 +473,7 @@
     ];
 
     let selectedHotel = null;
+    let currentBooking = {};
 
     function renderHotels(data) {
       const list = document.getElementById("hotel-list");
@@ -455,7 +515,6 @@
       document.getElementById("modal-title").innerText = `Book ${selectedHotel.name}`;
       document.getElementById("summary-rate").innerText = `Ksh ${selectedHotel.price.toLocaleString()}`;
       
-      // Default to today's date
       const today = new Date().toISOString().split('T')[0];
       document.getElementById("check-in").value = today;
       document.getElementById("nights").value = 1;
@@ -464,8 +523,8 @@
       document.getElementById("booking-modal").classList.add("open");
     }
 
-    function closeModal() {
-      document.getElementById("booking-modal").classList.remove("open");
+    function closeModal(modalId) {
+      document.getElementById(modalId).classList.remove("open");
     }
 
     function calculateTotal() {
@@ -475,21 +534,52 @@
       document.getElementById("summary-total").innerText = `Ksh ${total.toLocaleString()}`;
     }
 
-    function confirmBooking(event) {
+    function proceedToPayment(event) {
       event.preventDefault();
+      
       const name = document.getElementById("guest-name").value;
-      const nights = document.getElementById("nights").value;
-      const total = selectedHotel.price * parseInt(nights);
+      const checkIn = document.getElementById("check-in").value;
+      const nights = parseInt(document.getElementById("nights").value);
+      const phone = document.getElementById("phone-number").value;
+      const totalAmount = selectedHotel.price * nights;
 
-      const bookingAlert = document.getElementById("booking-alert");
-      bookingAlert.style.display = "block";
-      bookingAlert.innerHTML = `✅ <strong>Booking Confirmed!</strong><br>Thank you, ${name}. Your reservation at <strong>${selectedHotel.name}</strong> for ${nights} night(s) totaling <strong>Ksh ${total.toLocaleString()}</strong> is complete.`;
+      currentBooking = {
+        name,
+        checkIn,
+        nights,
+        phone,
+        totalAmount,
+        hotelName: selectedHotel.name
+      };
 
-      closeModal();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      // Switch Modals
+      closeModal("booking-modal");
+      document.getElementById("payment-processing").style.display = "block";
+      document.getElementById("payment-success").style.display = "none";
+      document.getElementById("payment-modal").classList.add("open");
+
+      // Simulate M-Pesa STK Push Confirmation delay
+      setTimeout(() => {
+        const mpesaRef = "RK" + Math.floor(10000000 + Math.random() * 90000000);
+        
+        document.getElementById("receipt-details").innerHTML = `
+          <strong>M-PESA CONFIRMATION</strong><br>
+          Ref: <strong>${mpesaRef}</strong><br>
+          ------------------------------<br>
+          Guest: ${currentBooking.name}<br>
+          Hotel: ${currentBooking.hotelName}<br>
+          Check-in: ${currentBooking.checkIn}<br>
+          Duration: ${currentBooking.nights} Night(s)<br>
+          Phone: ${currentBooking.phone}<br>
+          ------------------------------<br>
+          <strong>Paid: Ksh ${currentBooking.totalAmount.toLocaleString()}</strong>
+        `;
+
+        document.getElementById("payment-processing").style.display = "none";
+        document.getElementById("payment-success").style.display = "block";
+      }, 3500);
     }
 
-    // Initial render
     renderHotels(hotels);
   </script>
 </body>
